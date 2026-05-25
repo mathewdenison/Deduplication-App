@@ -1,6 +1,6 @@
-# NAS Deduplicator
+# File Deduplicator
 
-A high-performance, enterprise-grade C# utility designed to identify and isolate duplicate files on a NAS (Network Attached Storage) with maximum efficiency and data safety.
+A high-performance, enterprise-grade C# utility designed to identify and isolate duplicate files on a NAS (Network Attached Storage) or other storage types with maximum efficiency and data safety.
 
 ## Key Features
 
