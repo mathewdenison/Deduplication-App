@@ -1,0 +1,20 @@
+# .gitignore for .NET
+[Bb]in/
+[Oo]bj/
+*.user
+*.userosscache
+*.sln.docstates
+
+# Visual Studio Code
+.vscode/
+.history/
+
+# OS generated files
+.DS_Store
+Thumbs.db
+
+# Project specific
+hash_cache.json
+C:/Temp/dedupe_master_log.txt
+C:/Temp/dedupe_master_report.csv
+C:/Temp/suspect_mismatch_report.csv
