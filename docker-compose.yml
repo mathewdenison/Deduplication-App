@@ -1,0 +1,49 @@
+version: '3.8'
+
+services:
+  splunk:
+    image: splunk/splunk:latest
+    container_name: splunk
+    environment:
+      - SPLUNK_START_ARGS=--accept-license
+      - SPLUNK_GENERAL_TERMS=--accept-sgt-current-at-splunk-com
+      - SPLUNK_PASSWORD=SplunkPassword123!
+      - SPLUNK_HEC_TOKEN=00000000-0000-0000-0000-000000000000
+    ports:
+      - "8000:8000" # Web Interface
+      - "8088:8088" # HTTP Event Collector (HEC)
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+    volumes:
+      - splunk_data:/opt/splunk/var
+      - splunk_etc:/opt/splunk/etc
+
+  backend:
+    build: .
+    container_name: dedupe-backend
+    ports:
+      - "5100:8080"
+    environment:
+      - ASPNETCORE_URLS=http://+:8080
+      - SPLUNK_HEC_URL=http://splunk:8088/services/collector
+      - SPLUNK_HEC_TOKEN=00000000-0000-0000-0000-000000000000
+    volumes:
+      - dedupe_cache:/app/data
+    depends_on:
+      - splunk
+
+  frontend:
+    build: ./frontend
+    container_name: dedupe-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend
+
+volumes:
+  splunk_data:
+  splunk_etc:
+  dedupe_cache:

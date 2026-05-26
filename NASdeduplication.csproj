@@ -1,10 +1,10 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+﻿<Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <OutputType>Exe</OutputType>
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <UserSecretsId>nas-deduplicator-api</UserSecretsId>
   </PropertyGroup>
 
   <ItemGroup>
@@ -12,7 +12,9 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Fully exclude the test project from the main application build -->
     <Compile Remove="NASdeduplication.Tests\**" />
+    <Content Remove="NASdeduplication.Tests\**" />
     <EmbeddedResource Remove="NASdeduplication.Tests\**" />
     <None Remove="NASdeduplication.Tests\**" />
   </ItemGroup>

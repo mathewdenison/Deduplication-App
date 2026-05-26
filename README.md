@@ -1,57 +1,56 @@
-# File Deduplicator
+# NAS Deduplicator Enterprise Platform
 
-A high-performance, enterprise-grade C# utility designed to identify and isolate duplicate files on a NAS (Network Attached Storage) or other storage types with maximum efficiency and data safety.
+A high-performance, full-stack enterprise utility designed to identify and isolate duplicate files on a NAS (Network Attached Storage) with real-time monitoring and a web-based management dashboard.
 
-## Key Features
+## Architecture
 
-- **Tiered Hashing Strategy**:
-  - **Small Files (<= 10MB)**: Full XxHash64 for 100% accuracy.
-  - **Medium/Large Files (10MB - 1GB)**: Multi-Point Sampling (Start/Middle/End) for maximum speed.
-  - **Massive Files (>= 1GB)**: Full XxHash64 for maximum security on critical data.
-- **Enterprise Resilience**:
-  - **Hash Cache**: Remembers previously hashed files to make subsequent runs near-instant. Auto-saves every 1,000 files.
-  - **Long Path Support**: Supports directory paths up to 32,767 characters via `\\?\UNC\` prefix.
-  - **Network Error Recovery**: Automatic 5-second retries for common NAS connection blips.
-  - **Folder-Isolated Parallelism**: Processes folders in parallel while keeping file operations sequential within folders to prevent NAS metadata locking.
-- **Safe Isolation**: Files are never permanently deleted. They are moved to an archive share after byte-size verification.
+- **Backend**: ASP.NET Core 8.0 Web API with SignalR for real-time log streaming.
+- **Frontend**: React + Tailwind CSS dashboard for configuration and live progress monitoring.
+- **Telemetry**: Integrated Splunk forwarding for long-term auditing and analytics.
+- **Orchestration**: Fully containerized via Docker Compose for one-click deployment.
 
-## Prerequisites
+## Features
 
-- [.NET 8.0 SDK](https://dotnet.microsoft.com/download/dotnet/8.0)
+- **Web Dashboard**: Real-time progress bars, byte throughput, and success/failure metrics.
+- **Zero-Config Splunk**: Automatic connection when using the Docker stack.
+- **Tiered Hashing Strategy**: Optimized for speed (Sampling) and security (Full Hashing).
+- **Enterprise Resilience**: Hash caching, 32k character path support, and folder-isolated parallelism.
 
-## How to Build
+## Quick Start (Docker)
 
-To build the project in the current directory:
+To spin up the entire platform (UI, API, and Splunk):
 
 ```bash
-dotnet build
+docker-compose up -d
 ```
+
+- **Management UI**: [http://localhost:3000](http://localhost:3000)
+- **Splunk Dashboard**: [http://localhost:8000](http://localhost:8000) (User: `admin`, Pass: `SplunkPassword123!`)
+
+## Manual Development
+
+### 1. Build & Run Backend
+```bash
+dotnet build
+dotnet run
+```
+The API will be available at `http://localhost:5000`.
+
+### 2. Build & Run Frontend
+```bash
+cd frontend
+npm install
+npm start
+```
+The UI will be available at `http://localhost:3000`.
 
 ## How to Run Tests
 
-The project includes an xUnit test suite to verify hashing and path logic:
+The project includes an xUnit test suite to verify engine logic:
 
 ```bash
 dotnet test
 ```
-
-## Creating a Standalone Executable
-
-To publish the application as a single, self-contained executable file (so you can run it on a machine without .NET installed):
-
-```bash
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:PublishReadyToRun=true -p:IncludeNativeLibrariesForSelfExtract=true
-```
-
-The resulting `.exe` will be located in:
-`bin/Release/net8.0/win-x64/publish/`
-
-## Configuration
-
-The application will prompt for the following paths at startup:
-1. **Source Path**: The NAS directory to scan for duplicates.
-2. **Archive/Dupes Path**: Where to move identical clones.
-3. **Suspect Path**: Where to move files with identical names but different content (for manual review).
 
 ## Audit Trail
 
