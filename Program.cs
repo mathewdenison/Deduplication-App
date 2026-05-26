@@ -72,6 +72,9 @@ namespace NASDeduplicator
             builder.Services.AddControllers();
             builder.Services.AddSignalR();
             builder.Services.AddSingleton<DedupeService>();
+            builder.Services.AddSingleton<SchedulerService>();
+            builder.Services.AddSingleton<SplunkProxyService>();
+            builder.Services.AddHostedService<SchedulerService>(sp => sp.GetRequiredService<SchedulerService>());
             
             builder.Services.AddCors(options =>
             {

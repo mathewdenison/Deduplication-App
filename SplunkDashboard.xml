@@ -1,0 +1,77 @@
+<dashboard version="1.1" theme="dark">
+  <label>NAS Deduplicator Enterprise Metrics</label>
+  <description>Real-time monitoring of deduplication efficiency and throughput.</description>
+  <row>
+    <panel>
+      <single>
+        <title>Total Files Discovered</title>
+        <search>
+          <query>index=* event.event="SCAN_COMPLETE" | stats latest(event.filesDiscovered)</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+      </single>
+    </panel>
+    <panel>
+      <single>
+        <title>Total Data Hashed (GB)</title>
+        <search>
+          <query>index=* event.event="SCAN_COMPLETE" | eval gb = round(event.totalBytesHashed / 1024 / 1024 / 1024, 2) | stats latest(gb)</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="numberPrecision">0.00</option>
+        <option name="rangeColors">["0x53a051","0x0877a6","0xf8be34","0xf1813f","0xdc4e41"]</option>
+        <option name="refresh.display">progressbar</option>
+        <option name="unit">GB</option>
+      </single>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <chart>
+        <title>Deduplication Efficiency (Success vs Failure)</title>
+        <search>
+          <query>index=* event.event="FILE_MOVE_SUCCESS" OR event.event="FILE_MOVE_FAIL" | stats count by event.event</query>
+          <earliest>-7d@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.chart">pie</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+    <panel>
+      <chart>
+        <title>Hashing Throughput Over Time</title>
+        <search>
+          <query>index=* event.event="PHASE_CHANGE" | timechart span=1h avg(event.megabytesPerSecond) as MBps</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="charting.axisTitleX.visibility">collapsed</option>
+        <option name="charting.chart">area</option>
+        <option name="charting.drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </chart>
+    </panel>
+  </row>
+  <row>
+    <panel>
+      <table>
+        <title>Recent Failure Log</title>
+        <search>
+          <query>index=* event.severity="Red" | table _time event.message event.metadata</query>
+          <earliest>-24h@h</earliest>
+          <latest>now</latest>
+        </search>
+        <option name="drilldown">none</option>
+        <option name="refresh.display">progressbar</option>
+      </table>
+    </panel>
+  </row>
+</dashboard>

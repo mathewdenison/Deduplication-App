@@ -24,6 +24,7 @@ services:
   backend:
     build: .
     container_name: dedupe-backend
+    privileged: true
     ports:
       - "5100:8080"
     environment:
@@ -32,6 +33,8 @@ services:
       - SPLUNK_HEC_TOKEN=00000000-0000-0000-0000-000000000000
     volumes:
       - dedupe_cache:/app/data
+      # EXAMPLE: Map your NAS or data folders here
+      # - C:\Your\NAS\Data:/data
     depends_on:
       - splunk
 

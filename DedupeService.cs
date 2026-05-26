@@ -76,8 +76,11 @@ namespace NASDeduplicator
                 CacheManager.CachePath = Path.Combine(dataDir, "hash_cache.json");
                 _hashCache = CacheManager.LoadCache(WriteLog);
 
+                TelemetryEngine.SendEvent(new { @event = "WORKFLOW_START", source = SourceBase, archive = ArchiveBase, suspect = SuspectBase });
+
                 CurrentPhase = "PHASE 1A: Indexing";
                 WriteLog("Starting Scan...", ConsoleColor.Cyan);
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Indexing" });
 
                 string longSourceBase = FileSystemHandler.ToLongPath(SourceBase);
                 if (!Directory.Exists(longSourceBase))
@@ -107,8 +110,10 @@ namespace NASDeduplicator
                 }
 
                 if (token.IsCancellationRequested) return;
+                TelemetryEngine.SendEvent(new { @event = "SCAN_COMPLETE", filesDiscovered = FilesDiscovered });
 
                 CurrentPhase = "PHASE 1B: Global Grouping";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Global Grouping" });
                 var sizeGroups = allFiles.GroupBy(f => f.File.Length).Where(g => g.Count() > 1 && g.Key > 0).ToList();
                 var filesToHash = new List<FileTask>();
                 foreach (var g in sizeGroups) filesToHash.AddRange(g);
@@ -116,6 +121,7 @@ namespace NASDeduplicator
                 WriteLog($"Grouped {sizeGroups.Count} size buckets ({filesToHash.Count} candidate files).", ConsoleColor.Gray);
 
                 CurrentPhase = "PHASE 1C: Quick Hash";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Quick Hash" });
                 var medLargeFiles = filesToHash.Where(f => f.File.Length > 10485760).ToList();
                 var lockedQueue = new ConcurrentBag<FileTask>();
 
@@ -158,6 +164,7 @@ namespace NASDeduplicator
                 }
 
                 CurrentPhase = "PHASE 1D: Tiered Hashing";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Tiered Hashing" });
                 var filesForFullHash = new List<FileTask>();
                 var sizeAndQuickGroups = filesToHash.GroupBy(f => new { f.File.Length, f.QuickHash }).ToList();
                 var successfulHashes = new ConcurrentBag<FileRecord>();
@@ -230,6 +237,7 @@ namespace NASDeduplicator
                 ProcessTier(tierFullLarge, 4, "LARGE FULL (>1GB)");
 
                 CurrentPhase = "PHASE 1E: Decision Triage";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Decision Triage" });
                 var identicalReport = new ConcurrentBag<ActionRecord>();
                 var suspectReport = new ConcurrentBag<ActionRecord>();
                 
@@ -282,6 +290,7 @@ namespace NASDeduplicator
                 }
 
                 CurrentPhase = "PHASE 2/3: Moving Files";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Moving Files" });
                 WriteLog($"Moving {identicalReport.Count(r => r.Action == "MOVE_IDENTICAL")} Clones and {suspectReport.Count} Suspects...", ConsoleColor.Yellow);
                 var res1 = FileSystemHandler.SafeMove(identicalReport.Where(r => r.Action == "MOVE_IDENTICAL").ToList(), ArchiveBase, SourceBase, false, WriteLog);
                 var res2 = FileSystemHandler.SafeMove(suspectReport.ToList(), SuspectBase, SourceBase, true, WriteLog);
@@ -290,6 +299,7 @@ namespace NASDeduplicator
                 FailCount = res1.fail + res2.fail;
 
                 CurrentPhase = "PHASE 5: Path Optimization";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Path Optimization" });
                 WriteLog("Identifying files for path promotion...", ConsoleColor.Cyan);
                 var remainingSourceFiles = Directory.EnumerateFiles(longSourceBase, "*.*", enumOptions).ToList();
                 string[] junkFilesList = { "thumbs.db", ".ds_store", "desktop.ini" };
@@ -342,6 +352,7 @@ namespace NASDeduplicator
                 }
 
                 CurrentPhase = "PHASE 6: Deep Folder Sweep";
+                TelemetryEngine.SendEvent(new { @event = "PHASE_CHANGE", phase = "Deep Folder Sweep" });
                 WriteLog("Starting Recursive Folder Cleanup...", ConsoleColor.Cyan);
                 
                 // Refresh folder list after moves to ensure we see the current state
@@ -383,11 +394,21 @@ namespace NASDeduplicator
                 WriteLog($"Data Pushed (Hashing):{gigabytesHashed:F2} GB", ConsoleColor.Green);
                 if (totalTimer.Elapsed.TotalSeconds > 0) WriteLog($"Average Hash Speed:   {megabytesPerSecond:F2} MB/s", ConsoleColor.Green);
                 
+                TelemetryEngine.SendEvent(new { 
+                    @event = "WORKFLOW_COMPLETE", 
+                    totalBytesHashed = TotalBytesHashed, 
+                    successCount = SuccessCount, 
+                    failCount = FailCount,
+                    elapsedMinutes = totalTimer.Elapsed.TotalMinutes,
+                    megabytesPerSecond = megabytesPerSecond
+                });
+
                 CurrentPhase = "Complete";
             }
             catch (Exception ex)
             {
                 WriteLog($"Workflow Error: {ex.Message}", ConsoleColor.Red);
+                TelemetryEngine.SendEvent(new { @event = "WORKFLOW_ERROR", message = ex.Message, stackTrace = ex.StackTrace });
                 CurrentPhase = "Error";
             }
             finally
@@ -464,10 +485,12 @@ namespace NASDeduplicator
                     File.WriteAllText(rootFile, oldContent);
                     File.SetLastWriteTime(rootFile, DateTime.Now.AddDays(-10));
                     
-                    // Create 12 unique files at source root
+                    // Create 12 clones at source root
                     for (int f = 0; f < 12; f++)
                     {
-                        File.WriteAllText(Path.Combine(source, $"unique_root_file_{f}.txt"), $"UniqueContent_Root_{f}");
+                        string cloneFile = Path.Combine(source, $"clone_file_{f}.txt");
+                        File.WriteAllText(cloneFile, oldContent);
+                        File.SetLastWriteTime(cloneFile, DateTime.Now.AddDays(-10));
                     }
 
                     string currentPath = source;
@@ -478,8 +501,8 @@ namespace NASDeduplicator
                         Directory.CreateDirectory(currentPath);
                         for (int f = 0; f < 12; f++) 
                         {
-                            // Clones of the OLD version
-                            string cloneFile = Path.Combine(currentPath, $"clone_layer_{i}_file_{f}.txt");
+                            // Clones of the OLD version with SAME name across layers
+                            string cloneFile = Path.Combine(currentPath, $"clone_file_{f}.txt");
                             File.WriteAllText(cloneFile, oldContent);
                             File.SetLastWriteTime(cloneFile, DateTime.Now.AddDays(-10));
                         }
@@ -510,14 +533,22 @@ namespace NASDeduplicator
                     string finalRootContent = File.ReadAllText(rootFile);
                     bool promotedCorrectly = (finalRootContent == newContent);
 
+                    // Expected: 
+                    // Uniques: 12
+                    // Master Winner: 1
+                    // Clone Winners: 12
+                    // Total Source: 25
+                    // Clones Archived: 12 names * 8 nested versions = 96
+                    // Suspects: 1 (the old root master)
+                    
                     WriteLog("--- TEST RESULTS ---", ConsoleColor.Cyan);
-                    WriteLog($"Files left in Source:  {sourceFiles} (Target: 13)", sourceFiles == 13 ? ConsoleColor.Green : ConsoleColor.Red);
+                    WriteLog($"Files left in Source:  {sourceFiles} (Target: 25)", sourceFiles == 25 ? ConsoleColor.Green : ConsoleColor.Red);
                     WriteLog($"Files in Archive:      {archiveFiles} (Target: 96)", archiveFiles == 96 ? ConsoleColor.Green : ConsoleColor.Red);
-                    WriteLog($"Files in Suspect:      {suspectFiles} (Target: 1 - the old root file)", suspectFiles == 1 ? ConsoleColor.Green : ConsoleColor.Red);
+                    WriteLog($"Files in Suspect:      {suspectFiles} (Target: 1)", suspectFiles == 1 ? ConsoleColor.Green : ConsoleColor.Red);
                     WriteLog($"Empty Folders Left:    {sourceFolders} (Target: 0)", sourceFolders == 0 ? ConsoleColor.Green : ConsoleColor.Red);
                     WriteLog($"Latest Version Promoted: {promotedCorrectly}", promotedCorrectly ? ConsoleColor.Green : ConsoleColor.Red);
                     
-                    if (sourceFolders == 0 && sourceFiles == 13 && archiveFiles == 96 && promotedCorrectly) 
+                    if (sourceFolders == 0 && sourceFiles == 25 && archiveFiles == 96 && suspectFiles == 1 && promotedCorrectly) 
                         WriteLog("VERIFICATION PASSED: Application is safe for production use.", ConsoleColor.Green);
                     else
                         WriteLog("VERIFICATION FAILED: Logic or Math mismatch.", ConsoleColor.Red);
